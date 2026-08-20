@@ -1,5 +1,4 @@
 * text=auto
-
 # Code & text files: store as LF in the repo
 *.py text eol=lf
 *.js text eol=lf
@@ -13,9 +12,8 @@
 *.ini text eol=lf
 *.cfg text eol=lf
 *.spec text eol=lf
-
 # Binary files: never normalize
-*.exe binary
+*.exe filter=lfs diff=lfs merge=lfs -text
 *.dll binary
 *.pyd binary
 *.ico binary
