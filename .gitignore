@@ -1,0 +1,23 @@
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+
+# Runtime generated
+Temp/
+UI-settings.json
+output/
+
+# Build inputs downloaded by CI/scripts
+GICutscenes.exe
+appsettings.json
+versions.json
+
+# Test assets
+Cs_201104_DaoQiDengdao_P2_Girl.usm
+*.usm
+*.srt

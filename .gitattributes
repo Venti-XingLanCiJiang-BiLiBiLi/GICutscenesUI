@@ -1,0 +1,38 @@
+* text=auto
+
+# Code & text files: store as LF in the repo
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.spec text eol=lf
+
+# Binary files: never normalize
+*.exe binary
+*.dll binary
+*.pyd binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bmp binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.m2v binary
+*.webm binary
+*.mp4 binary
+*.usm binary
+*.hca binary
+*.ivf binary
+*.zip binary
+*.woff2 binary
+*.ttf binary
