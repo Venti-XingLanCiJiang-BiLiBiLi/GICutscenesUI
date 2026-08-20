@@ -10,9 +10,9 @@
 	}
 	setTimeout(async _=>{
 		await get_all_fonts()
-		await get_encoders()
-		load_settings(["subtitles_font", "gpu"])
+		load_settings(["subtitles_font"])
 		init_subtitles_preview()
+		init_mp4_settings_lock()
 	}, 0)
 	setTimeout(_=>{
 		document.querySelector("#loader-area").classList.add("hidden")

@@ -132,14 +132,38 @@
 					<option value="3">Korean</option>
 				</select>
 
-				<i class="fa-solid fa-image"></i>
-				<span translation="__quality__">Video quality</span>
-				<div class="quality-range-area">
+				<i class="fa-solid fa-file-video"></i>
+				<span translation="__convert_mp4__">Convert to MP4</span>
+				<label class="toggle-switch">
+					<input type="checkbox" name="convert_mp4" class="settings_element">
+					<div class="toggle-slider"></div>
+				</label>
+
+				<i class="fa-solid fa-sliders"></i>
+				<span class="mp4-label">
+					<span translation="__mp4_encoder__">MP4 encoder</span>
+					<i class="mp4-hint" translation="__title:mp4_encoder_hint__">?</i>
+				</span>
+				<select class="input_element settings_element mp4-only" name="mp4_encoder" style="text-transform: capitalize;">
+					<option value="auto" selected translation="__mp4_encoder_auto__">Auto (GPU first)</option>
+					<option value="h264_nvenc">h264_nvenc</option>
+					<option value="h264_qsv">h264_qsv</option>
+					<option value="h264_amf">h264_amf</option>
+					<option value="h264_mf">h264_mf</option>
+					<option value="libx264">libx264</option>
+					<option value="libsvtav1">libsvtav1</option>
+				</select>
+
+				<i class="fa-solid fa-gauge-high"></i>
+				<span class="mp4-label">
+					<span translation="__mp4_bitrate__">MP4 bitrate</span>
+					<i class="mp4-hint" translation="__title:mp4_bitrate_hint__">?</i>
+				</span>
+				<div class="mp4-bitrate-row">
 					<input type="range" min="5000" max="30000" step="1000" value="15000"
-						list="quality-markers" class="settings_element" name="video_quality"
-						style="width: 100%;"
+						list="quality-markers" class="settings_element mp4-only" name="video_quality"
+						style="flex: 1; min-width: 0;"
 					/>
-					<span id="quality-value">15000</span>
 					<datalist id="quality-markers">
 						<option value="5000"></option>
 						<option value="10000"></option>
@@ -148,13 +172,19 @@
 						<option value="25000"></option>
 						<option value="30000"></option>
 					</datalist>
+					<input type="number" min="0" step="500" placeholder="15000"
+						class="input_element settings_element mp4-only" name="mp4_bitrate" style="width: 110px;">
 				</div>
 
-				<i class="fa-solid fa-microchip"></i>
-				<span translation="__gpu__">GPU rendering</span>
-				<select class="input_element settings_element" name="gpu" style="text-transform:capitalize;">
-					<option value="" translation="__gpu_none__" selected>None</option>
-				</select>
+				<i class="fa-solid fa-headphones"></i>
+				<span class="mp4-label">
+					<span translation="__lossless_audio__">Lossless audio</span>
+					<i class="mp4-hint" translation="__title:lossless_audio_hint__">?</i>
+				</span>
+				<label class="toggle-switch">
+					<input type="checkbox" name="lossless_audio" class="settings_element mp4-only">
+					<div class="toggle-slider"></div>
+				</label>
 
 				<i class="fa-solid fa-trash-can"></i>
 				<span translation="__delete_after_merge__">Delete temp files</span>
@@ -168,14 +198,14 @@
 						<i class="fa-solid fa-closed-captioning"></i>
 						<span translation="__subtitles_area__">Subtitles</span>
 						<label class="toggle-switch">
-							<input type="checkbox" name="subtitles" class="settings_element">
+							<input type="checkbox" name="subtitles" class="settings_element mp4-only">
 							<div class="toggle-slider"></div>
 						</label>
 					</div>
 					<div class="section-body">
 						<i class="fa-solid fa-database"></i>
 						<label translation="__subtitles_provider__">Sourse</label>
-						<select class="input_element settings_element" id="subtitles_provider" name="subtitles_provider">
+						<select class="input_element settings_element mp4-only" id="subtitles_provider" name="subtitles_provider">
 							<option value="https://gitlab.com/Dimbreath/animegamedata2" class="mono" selected>gitlab/Dimbreath/animegamedata2</option>
 							<option value="https://github.com/Sycamore0/GenshinData" class="mono">github/Sycamore0/GenshinData</option>
 							<option value="local" translation="__subtitles_provider_local__">Local</option>
@@ -186,12 +216,12 @@
 							<button onclick="change_subtitles_folder()" class="input_element" translation="__change__">Change</button>
 						</div>
 						<div id="provider_url" class="fill-full">
-							<input type="text" class="input_element settings_element" name="subtitles_url" placeholder="https://" style="font-family:monospace;">
+							<input type="text" class="input_element settings_element mp4-only" name="subtitles_url" placeholder="https://" style="font-family:monospace;">
 						</div>
 
 						<i class="fa-solid fa-language"></i>
 						<span translation="__subtitles_language__">Subtitle language</span>
-						<select class="input_element settings_element" name="subtitles_lang">
+						<select class="input_element settings_element mp4-only" name="subtitles_lang">
 							<option value="EN" selected>English</option>
 							<option value="DE">German</option>
 							<option value="ES">Spanish</option>
@@ -209,7 +239,17 @@
 							<option value="VI">Vietnamese</option>
 						</select>
 
-						<button onclick="openTab('subtitles_customize')" class="input_element" style="grid-column: 3;">
+						<i class="fa-solid fa-closed-captioning"></i>
+						<span class="mp4-label">
+							<span translation="__subtitles_mode__">Subtitle mode</span>
+							<i class="mp4-hint" translation="__title:subtitles_mode_hint__">?</i>
+						</span>
+						<select class="input_element settings_element mp4-only" name="subtitles_mode">
+							<option value="burn" translation="__subtitles_mode_burn__" selected>Burn into video</option>
+							<option value="stream" translation="__subtitles_mode_stream__">Embed as subtitle track</option>
+						</select>
+
+						<button onclick="openTab('subtitles_customize')" id="subtitles_customize_btn" class="input_element" style="grid-column: 3;">
 							<i class="fa-solid fa-sliders"></i>
 							<span translation="__subtitles_customization_button__">Subtitle design</span>
 						</button>

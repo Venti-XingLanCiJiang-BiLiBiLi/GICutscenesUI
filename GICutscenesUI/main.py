@@ -4,6 +4,8 @@ import eel
 import sys, os
 import shutil
 import subprocess
+import threading
+import time
 import json
 from json_minify import json_minify
 import re
@@ -247,12 +249,72 @@ def download_latest_version_file():
 def send_message_to_ui_output(type_, message):
 	eel.putMessageInOutput(type_, message)()
 
-def log_subprocess_output(pipe, process=None):
-	for line in pipe:
-		if process:
-			if STOPED_BY_USER:
+def run_command(command, output_file=None):
+	if CONSOLE_DEBUG_MODE:
+		return subprocess.call(command)
+	process = subprocess.Popen(command, encoding='utf-8', universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
+
+	def reader(pipe):
+		buffer = ""
+		try:
+			while True:
+				chunk = pipe.read(4096)
+				if not chunk:
+					break
+				buffer += chunk
+				parts = re.split(r'[\r\n]', buffer)
+				buffer = parts.pop()
+				for line in parts:
+					if line.strip():
+						send_message_to_ui_output("console", line.strip())
+		except (OSError, ValueError):
+			pass
+		if buffer.strip():
+			send_message_to_ui_output("console", buffer.strip())
+		try:
+			pipe.close()
+		except (OSError, ValueError):
+			pass
+
+	threading.Thread(target=reader, args=(process.stderr,), daemon=True).start()
+	threading.Thread(target=reader, args=(process.stdout,), daemon=True).start()
+
+	last_size = -1
+	frozen_for = 0.0
+	start = time.time()
+	while True:
+		try:
+			return process.wait(timeout=0.25)
+		except subprocess.TimeoutExpired:
+			pass
+		if STOPED_BY_USER:
+			process.kill()
+			continue
+		if output_file:
+			try:
+				size = os.path.getsize(output_file)
+			except OSError:
+				size = 0
+			frozen_for = frozen_for + 0.25 if size == last_size else 0
+			last_size = size
+			if time.time() - start > 10 and frozen_for >= 5:
+				send_message_to_ui_output("console", "ffmpeg output has not changed for 5s, assuming it is frozen and stopping")
 				process.kill()
-		send_message_to_ui_output("console", line.strip())
+				continue
+
+
+def get_encoder_chain(selection):
+	"""Encoders to try in order; on failure the next one is used."""
+	chain = []
+	if selection and selection != "auto":
+		chain.append(selection)
+	else:
+		for gpu in GPU_args:
+			encoder = GPU_args[gpu]["encode"]
+			if test_encoder(encoder):
+				chain.append(encoder)
+	chain += ["libx264", "h264_mf", "libsvtav1", "libaom-av1"]
+	return chain
 
 
 # ---- Explorer Functions ----
@@ -380,14 +442,6 @@ def test_encoder(encoder, decoder=None):
 		if returncode == 0: return True
 	except: None
 
-@eel.expose
-def get_ffmpeg_supports():
-	suported = []
-	for gpu, args in GPU_args.items():
-		if test_encoder(args.get("encode")):
-			suported.append(gpu)
-	return suported
-
 
 # ---- MAIN Functions ----
 STOPED_BY_USER = None
@@ -426,10 +480,7 @@ def start_work(files, args):
 			if CONSOLE_DEBUG_MODE:
 				subprocess.call([SCRIPT_FILE, 'demuxUsm', file, '--output', OUTPUT_F])
 			else:
-				process = subprocess.Popen([SCRIPT_FILE, 'demuxUsm', file, '--output', OUTPUT_F], encoding=os.device_encoding(0), universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW)
-				with process.stdout:
-					log_subprocess_output(process.stdout)
-				p_status = process.wait()
+				p_status = run_command([SCRIPT_FILE, 'demuxUsm', file, '--output', OUTPUT_F])
 
 			if p_status != 0:
 				send_message_to_ui_output("event", "error")
@@ -459,116 +510,158 @@ def start_work(files, args):
 					if os.path.exists(f):
 						os.remove(f)
 
-				# Merge Video and Audio
-				if args['merge']:
-					if STOPED_BY_USER: break
+				# Merge / Convert
+				if STOPED_BY_USER: break
+				audio_index = int(args['audio_index']) if args['merge'] else 0
+				audio_file = os.path.join(OUTPUT_F, str(old_file_name) + "_" + str(audio_index) + ".wav")
+				webm_file = os.path.join(OUTPUT_F, str(old_file_name) + ".webm")
+				mp4_file = os.path.join(OUTPUT_F, str(old_file_name) + ".mp4")
+
+				# Subtitles
+				subtitles_file = None
+				if args['subtitles']:
+					send_message_to_ui_output("console", "\nSearching for subtitles")
+
+					if args.get('subtitles_provider') == "local":
+						if args.get('subtitles_folder'):
+							subtitles = find_subtitles(
+								old_file_name,
+								provider=args.get('subtitles_folder'),
+								lang=args.get('subtitles_lang')
+							)
+					elif args.get('subtitles_provider') == "url":
+						if args.get('subtitles_url'):
+							subtitles = find_subtitles(
+								old_file_name,
+								provider=args.get('subtitles_url'),
+								lang=args.get('subtitles_lang')
+							)
 					else:
-						audio_index = int(args['audio_index'])
-						audio_file = os.path.join(OUTPUT_F , str(old_file_name) + "_" + str(audio_index) + ".wav")
-						output_file = os.path.join(OUTPUT_F, str(old_file_name) + ".mp4")
+						subtitles = find_subtitles(
+							old_file_name,
+							provider=args.get('subtitles_provider'),
+							lang=args.get('subtitles_lang')
+						)
 
-						# Subtitles
-						subtitles_file = None
-						if args['subtitles']:
-							send_message_to_ui_output("console", "\nSearching for subtitles")
-
-							if args.get('subtitles_provider') == "local":
-								if args.get('subtitles_folder'):
-									subtitles = find_subtitles(
-										old_file_name,
-										provider=args.get('subtitles_folder'),
-										lang=args.get('subtitles_lang')
-									)
-							elif args.get('subtitles_provider') == "url":
-								if args.get('subtitles_url'):
-									subtitles = find_subtitles(
-										old_file_name,
-										provider=args.get('subtitles_url'),
-										lang=args.get('subtitles_lang')
-									)
-							else:
-								subtitles = find_subtitles(
-									old_file_name,
-									provider=args.get('subtitles_provider'),
-									lang=args.get('subtitles_lang')
-								)
-
-							if not subtitles:
-								send_message_to_ui_output("console", "Subtitles not found!")
-								send_message_to_ui_output("sub_work", {"name": "subtitles", "status": False})
-							else:
-								send_message_to_ui_output("console", "Converting subtitles")
-								send_message_to_ui_output("sub_work", {"name": "subtitles", "status": True})
-								subtitles_file = os.path.join(OUTPUT_F, str(old_file_name) + ".ass")
-								srt_to_ass(
-									subtitles,
-									subtitles_file,
-									font_name=args.get('subtitles_font'),
-									font_size=args.get('subtitles_fontsize'),
-									text_color=args.get('subtitles_text_color'),
-									outline_color=args.get('subtitles_outline_color'),
-									outline_width=args.get('subtitles_outline_width'),
-									letter_spacing=args.get('subtitles_letter_spacing'),
-									bold=args.get('subtitles_bold'),
-									italic=args.get('subtitles_italic')
-								)
-
-						# Merging
-						send_message_to_ui_output("event", "run_merge")
-						send_message_to_ui_output("console", "\nStarting ffmpeg")
-						if os.path.exists(output_file):
-							send_message_to_ui_output("console", f'File {output_file} already exists.')
-							os.remove(output_file)
-
-						send_message_to_ui_output("console", "Working ffmpeg...")
-						p_status = 0
-						bitrate = int(args['video_quality']) * 1000
-						gp_args = GPU_args[args.get('gpu')] if args.get('gpu') and args.get('gpu') in GPU_args else {}
-						command = [FFMPEG, '-hide_banner']
-						if "decode" in gp_args:
-							if gp_args['decode'] == "qsv" and subtitles_file: pass
-							else:
-								command += ['-hwaccel', gp_args['decode']]
-						command += [
-							'-i', new_file_name,
-							'-i', audio_file
-						]
-						if subtitles_file:
-							subs_file = subtitles_file.replace("\\", "/").replace(":", "\\\\\\:")
-							command += ["-vf", f'subtitles={subs_file}']
-						if "encode" in gp_args:
-							command += ['-c:v', gp_args['encode']]
-						command += [
-							'-b:v', str(bitrate),
-							'-b:a', '192K',
-							output_file
-						]
-
-						if CONSOLE_DEBUG_MODE:
-							subprocess.call(command)
+					if not subtitles:
+						send_message_to_ui_output("console", "Subtitles not found!")
+						send_message_to_ui_output("sub_work", {"name": "subtitles", "status": False})
+					else:
+						stream_subs = args.get('subtitles_mode') == "stream"
+						if not args.get('convert_mp4'):
+							send_message_to_ui_output("console", "Subtitles only apply to MP4 output")
+						send_message_to_ui_output("console", "Converting subtitles")
+						send_message_to_ui_output("sub_work", {"name": "subtitles", "status": True})
+						if stream_subs:
+							subtitles_file = os.path.join(temp_folder, str(old_file_name) + ".srt")
+							with open(subtitles_file, 'w', encoding='utf-8') as f:
+								f.write(subtitles.read())
 						else:
-							process = subprocess.Popen(command, encoding='utf-8', universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
-							with process.stderr:
-								log_subprocess_output(process.stderr, process)
-							p_status = process.wait()
+							subtitles_file = os.path.join(temp_folder, str(old_file_name) + ".ass")
+							srt_to_ass(
+								subtitles,
+								subtitles_file,
+								font_name=args.get('subtitles_font'),
+								font_size=args.get('subtitles_fontsize'),
+								text_color=args.get('subtitles_text_color'),
+								outline_color=args.get('subtitles_outline_color'),
+								outline_width=args.get('subtitles_outline_width'),
+								letter_spacing=args.get('subtitles_letter_spacing'),
+								bold=args.get('subtitles_bold'),
+								italic=args.get('subtitles_italic')
+							)
 
-						if p_status != 0:
-							if os.path.exists(output_file): os.remove(output_file)
-							send_message_to_ui_output("event", "error")
-							continue
-						else:
-							send_message_to_ui_output("console", "Merging complete!")
-							if args['delete_after_merge']:
-								send_message_to_ui_output("console", "Removing trash...")
-								if subtitles_file: os.remove(subtitles_file)
-								files_to_remove = [
-									old_file_name + ".m2v",
-									*[f"{old_file_name}_{i}.wav" for i in [0, 1, 2, 3]]
-								]
-								files_to_remove = list(map(lambda x: os.path.join(OUTPUT_F, x),files_to_remove))
-								for f in files_to_remove:
-									os.remove(f)
-								send_message_to_ui_output("console", "OK")
+				# Remux video to webm
+				send_message_to_ui_output("event", "run_merge")
+				send_message_to_ui_output("console", "\nStarting ffmpeg...")
+				if os.path.exists(webm_file):
+					send_message_to_ui_output("console", f'File {webm_file} already exists.')
+					os.remove(webm_file)
+				command = [FFMPEG, '-hide_banner', '-i', new_file_name]
+				if args['merge']:
+					send_message_to_ui_output("console", "Merging audio into webm")
+					command += ['-i', audio_file]
+				command += ['-c:v', 'copy']
+				if args['merge']:
+					command += ['-c:a', 'libopus', '-b:a', '320K']
+				send_message_to_ui_output("console", "Working ffmpeg...")
+				p_status = run_command(command + [webm_file])
+				if p_status != 0:
+					if os.path.exists(webm_file): os.remove(webm_file)
+					send_message_to_ui_output("event", "error")
+					continue
+				send_message_to_ui_output("console", "webm created!")
+
+				# Convert to MP4
+				if args.get('convert_mp4'):
+					send_message_to_ui_output("console", "\nConverting to MP4")
+					if os.path.exists(mp4_file):
+						send_message_to_ui_output("console", f'File {mp4_file} already exists.')
+						os.remove(mp4_file)
+					subtitles_args = []
+					stream_subs = bool(subtitles_file and args.get('subtitles_mode') == "stream")
+					if subtitles_file and not stream_subs:
+						subs_file = os.path.relpath(subtitles_file).replace("\\", "/")
+						subtitles_args = ["-vf", f'subtitles={subs_file}']
+					audio_strategies = [[]]
+				mapping_args = ['-map', '0:v:0']
+				if args['merge']:
+					if args.get('lossless_audio'):
+						# Lossless: copy PCM from the wav into the mp4 (ipcm)
+						audio_strategies = [
+							['-i', audio_file, '-c:a', 'copy', '-map', '1:a:0'],
+							['-i', audio_file, '-c:a', 'aac', '-b:a', '320K', '-map', '1:a:0']
+						]
+					else:
+						# Default: reuse the opus track from the webm
+						audio_strategies = [
+							['-map', '0:a:0', '-c:a', 'copy'],
+							['-i', audio_file, '-c:a', 'aac', '-b:a', '320K', '-map', '1:a:0']
+						]
+					bitrate_args = []
+					if args.get('mp4_bitrate'):
+						bitrate_args = ['-b:v', str(int(args['mp4_bitrate'])) + 'K']
+
+					p_status = 1
+					encoder_chain = get_encoder_chain(args.get('mp4_encoder'))
+					for audio_args in audio_strategies:
+						if 'aac' in audio_args:
+							send_message_to_ui_output("console", "Audio copy not supported, re-encoding audio to AAC")
+						audio_input = audio_args[:2] if audio_args[:1] == ['-i'] else []
+						audio_output = audio_args[2:] if audio_input else audio_args
+						for index, encoder in enumerate(encoder_chain):
+							if STOPED_BY_USER: break
+							if os.path.exists(mp4_file): os.remove(mp4_file)
+							send_message_to_ui_output("console", f'Encoding with {encoder}...')
+							srt_input = ['-i', subtitles_file] if stream_subs else []
+							subs_map_args = ['-map', f"{2 if audio_input else 1}:s:0", '-c:s', 'mov_text'] if stream_subs else []
+							command = [FFMPEG, '-hide_banner', '-i', webm_file] + audio_input + srt_input + mapping_args + subtitles_args + ['-c:v', encoder] + audio_output + subs_map_args + bitrate_args + [mp4_file]
+							p_status = run_command(command, mp4_file)
+							if p_status == 0: break
+							if index + 1 < len(encoder_chain):
+								send_message_to_ui_output("console", f'Encoder {encoder} failed, retrying with {encoder_chain[index + 1]}...')
+							else:
+								send_message_to_ui_output("console", f'Encoder {encoder} failed.')
+						if p_status == 0: break
+					if p_status != 0:
+						if os.path.exists(mp4_file): os.remove(mp4_file)
+						send_message_to_ui_output("event", "error")
+						continue
+					send_message_to_ui_output("console", "MP4 created!")
+
+				# Cleanup
+				if args['delete_after_merge'] and (args['merge'] or args.get('convert_mp4')):
+					send_message_to_ui_output("console", "Removing trash...")
+					files_to_remove = [new_file_name]
+					if args['merge']:
+						files_to_remove += [os.path.join(OUTPUT_F, f"{old_file_name}_{i}.wav") for i in [0, 1, 2, 3]]
+					if args.get('convert_mp4'):
+						files_to_remove += [webm_file]
+					if subtitles_file:
+						files_to_remove += [subtitles_file]
+					for f in files_to_remove:
+						if os.path.exists(f): os.remove(f)
+					send_message_to_ui_output("console", "OK")
 
 				if i != file_lenth - 1:
 					send_message_to_ui_output("console", "\n")

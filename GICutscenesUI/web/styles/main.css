@@ -607,8 +607,39 @@ table td{
 	transform: translateX(20px);
 }
 
-.quality-range-area{
+.mp4-bitrate-row{
 	display: flex;
 	align-items: center;
 	gap: 8px;
+}
+
+.mp4-label{
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.mp4-hint{
+	font-style: normal;
+	font-size: 12px;
+	line-height: 16px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: #999;
+	color: #fff;
+	text-align: center;
+	cursor: help;
+}
+
+.mp4-only:disabled{
+	opacity: .45;
+	cursor: not-allowed;
+}
+
+.toggle-switch.disabled{
+	opacity: .45;
+}
+.toggle-switch.disabled .toggle-slider{
+	cursor: not-allowed;
 }

@@ -25,12 +25,20 @@ async function load_settings(keys=null){
 }
 function init_quality_slider(){
 	const quality_input = document.querySelector('.settings_element[name="video_quality"]');
-	const quality_value = document.querySelector("#quality-value");
+	const bitrate_input = document.querySelector('.settings_element[name="mp4_bitrate"]');
 	["input", "change"].forEach(ev=>{
 		quality_input.addEventListener(ev, e=>{
-			quality_value.textContent = e.target.value
+			if (bitrate_input) bitrate_input.value = e.target.value
 		})
 	})
+	if (bitrate_input){
+		bitrate_input.addEventListener("input", e=>{
+			const v = parseInt(e.target.value)
+			if (e.target.value !== "" && v >= +quality_input.min && v <= +quality_input.max){
+				quality_input.value = v
+			}
+		})
+	}
 }
 async function exportSettings(){
 	let settings = parseSettings()
@@ -70,6 +78,21 @@ function changeTheme(){
 }
 
 
+function init_mp4_settings_lock(){
+	let elements = document.querySelectorAll(".mp4-only")
+	function update(){
+		let active = document.querySelector(".settings_element[name='convert_mp4']").checked
+		elements.forEach(e=>{
+			e.disabled = !active
+			let label = e.closest(".toggle-switch")
+			if (label) label.classList.toggle("disabled", !active)
+		})
+		update_subtitles_mode()
+	}
+	document.querySelector(".settings_element[name='convert_mp4']").onchange = update
+	update()
+}
+
 async function change_output_folder(){
 	let folder = await eel.ask_output_folder()();
 	update_path(folder, document.getElementById("output_path"))
@@ -99,8 +122,18 @@ async function get_all_fonts(){
 	})
 }
 
+function update_subtitles_mode(){
+	let off = document.querySelector(".settings_element[name='subtitles_mode']").value == "stream" ||
+		!document.querySelector(".settings_element[name='convert_mp4']").checked
+	document.querySelectorAll(".subtitles_setting").forEach(e=>{ e.disabled = off })
+	document.getElementById("subtitles_customize_btn").disabled = off
+}
+
 function init_subtitles_preview(){
 	let elements = document.querySelectorAll(".subtitles_setting")
+	let mode_el = document.querySelector(".settings_element[name='subtitles_mode']")
+	mode_el.onchange = update_subtitles_mode
+	update_subtitles_mode()
 	function get_values(){
 		let replace_keys = {
 			"subtitles_font": "font_name",
@@ -132,17 +165,6 @@ function init_subtitles_preview(){
 		e.onchange = make_request
 	})
 	make_request()
-}
-
-async function get_encoders(){
-	let gpus = await eel.get_ffmpeg_supports()()
-	let parrent = document.querySelector(".settings_element[name='gpu']")
-	gpus.forEach(gpu=>{
-		let option = document.createElement("option")
-		option.value = gpu
-		option.innerHTML = gpu
-		parrent.appendChild(option)
-	})
 }
 
 function donationPopup(){
