@@ -14,7 +14,13 @@
 <h2 align="center">
     <a href="https://github.com/SuperZombi/GICutscenesUI/releases/latest/download/GICutscenesUI.exe">
         <img src="https://github.com/user-attachments/assets/f402fe4d-ca13-4522-8524-c16ed637966e" width="30" align="top">
-        Download
+        Download from original repo
+    </a>
+</h2>
+<h2 align="center">
+    <a href="https://github.com/Venti-XingLanCiJiang-BiLiBiLi/GICutscenesUI/releases/latest/download/GICutscenesUI.exe">
+        <img src="https://github.com/user-attachments/assets/f402fe4d-ca13-4522-8524-c16ed637966e" width="30" align="top">
+        Download from this fork
     </a>
 </h2>
 
