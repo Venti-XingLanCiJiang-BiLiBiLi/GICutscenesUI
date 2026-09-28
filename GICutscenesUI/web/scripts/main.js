@@ -4,6 +4,7 @@
 	await getTranslation()
 	get_output_folder()
 	get_subtitles_folder()
+	load_ffmpeg_info()
 	let tab_now = window.location.hash.split("#").at(-1)
 	if (tab_now){
 		openTab(tab_now)

@@ -71,27 +71,68 @@ def file_in_temp(file):
 	return os.path.dirname(file) == os.path.dirname(resource_path(os.path.basename(file)))
 
 
+# ---- FFMPEG Functions ----
+
+FFMPEG_SOURCES = ("bundled", "path", "custom")
+FFMPEG_SOURCE = "bundled"
+FFMPEG_CUSTOM = ""
+FFMPEG_NOTE = ""
+FFMPEG = "ffmpeg"
+
+def resolve_ffmpeg():
+	"""Pick the ffmpeg executable selected by FFMPEG_SOURCE.
+
+	Returns (path, warning); the warning is empty when the selected source worked,
+	otherwise it explains which fallback was used.
+	"""
+	source = FFMPEG_SOURCE if FFMPEG_SOURCE in FFMPEG_SOURCES else "bundled"
+
+	if source == "path":
+		found = shutil.which("ffmpeg")
+		if found: return found, ""
+		return "ffmpeg", "ffmpeg was not found in PATH, using the bare command name"
+
+	if source == "custom":
+		custom = (FFMPEG_CUSTOM or "").strip()
+		if custom and os.path.isfile(custom):
+			return custom, ""
+		reason = "Custom ffmpeg file not found"
+	else:
+		bundled = find_script("ffmpeg.exe")
+		if bundled: return bundled, ""
+		reason = "Bundled ffmpeg.exe not found"
+
+	found = shutil.which("ffmpeg")
+	if found:
+		return found, f"{reason}, falling back to PATH ({found})"
+	return "ffmpeg", f"{reason}, falling back to 'ffmpeg' from PATH"
+
+
 # ---- Settings Functions ----
 
 def load_settings_inline():
-	global SCRIPT_FILE, OUTPUT_F, FFMPEG, SUBTITLES_F
+	global SCRIPT_FILE, OUTPUT_F, FFMPEG, SUBTITLES_F, FFMPEG_SOURCE, FFMPEG_CUSTOM, FFMPEG_NOTE
+	FFMPEG_SOURCE = "bundled"
+	FFMPEG_CUSTOM = ""
 	set_file = os.path.join(os.getcwd(), "UI-settings.json")
 	settings = {}
 	if os.path.exists(set_file):
 		with open(set_file, 'r', encoding='utf-8') as file:
 			settings = json.loads(file.read())
-			if "script_file" in settings.keys():
-				SCRIPT_FILE = settings["script_file"]
-			if "output_folder" in settings.keys():
-				OUTPUT_F = settings["output_folder"]
-			if "FFMPEG" in settings.keys():
-				FFMPEG = settings["FFMPEG"]
-			if "subtitles_folder" in settings.keys():
-				SUBTITLES_F = settings["subtitles_folder"]
+			if "ffmpeg_source" in settings.keys():
+				FFMPEG_SOURCE = settings["ffmpeg_source"]
+			if "ffmpeg_custom_path" in settings.keys():
+				FFMPEG_CUSTOM = settings["ffmpeg_custom_path"]
+
+	# older versions could only store a full path, treat it as a custom ffmpeg
+	legacy_path = settings.get("FFMPEG")
+	if "ffmpeg_source" not in settings.keys() and legacy_path and os.path.isfile(legacy_path):
+		FFMPEG_SOURCE = "custom"
+		FFMPEG_CUSTOM = legacy_path
 
 	SCRIPT_FILE = settings.get("script_file") or find_script("GICutscenes.exe")
 	OUTPUT_F = settings.get("output_folder") or os.path.join(os.getcwd(), "output")
-	FFMPEG = settings.get("FFMPEG") or find_script("ffmpeg.exe") or "ffmpeg"
+	FFMPEG, FFMPEG_NOTE = resolve_ffmpeg()
 	SUBTITLES_F = settings.get("subtitles_folder") or ""
 
 	if os.path.exists(os.path.join(os.getcwd(), "versions.json")) and file_in_temp(SCRIPT_FILE):
@@ -113,25 +154,64 @@ def load_settings():
 			return settings
 	return {}
 
-@eel.expose
-def save_settings(settings):
+def store_settings(settings):
 	settings['output_folder'] = OUTPUT_F
 	settings['subtitles_folder'] = SUBTITLES_F
-	if not file_in_temp(SCRIPT_FILE):
+	settings['ffmpeg_source'] = FFMPEG_SOURCE
+	settings['ffmpeg_custom_path'] = FFMPEG_CUSTOM
+	if SCRIPT_FILE and not file_in_temp(SCRIPT_FILE):
 		settings['script_file'] = SCRIPT_FILE
-	if not file_in_temp(FFMPEG):
-		settings['FFMPEG'] = FFMPEG
 
 	with open(os.path.join(os.getcwd(), "UI-settings.json"), 'w', encoding='utf-8') as file:
 		file.write(json.dumps(settings, indent=4, ensure_ascii=False))
 	return True
 
 @eel.expose
+def save_settings(settings):
+	return store_settings(settings)
+
+@eel.expose
+def get_ffmpeg_info():
+	return {
+		"source": FFMPEG_SOURCE,
+		"custom": FFMPEG_CUSTOM,
+		"path": FFMPEG,
+		"warning": FFMPEG_NOTE
+	}
+
+@eel.expose
+def set_ffmpeg_source(source):
+	global FFMPEG, FFMPEG_NOTE, FFMPEG_SOURCE
+	if source in FFMPEG_SOURCES:
+		FFMPEG_SOURCE = source
+	FFMPEG, FFMPEG_NOTE = resolve_ffmpeg()
+	store_settings(load_settings())
+	return get_ffmpeg_info()
+
+@eel.expose
+def ask_ffmpeg_file():
+	global FFMPEG, FFMPEG_CUSTOM, FFMPEG_NOTE, FFMPEG_SOURCE
+	root = Tk()
+	root.withdraw()
+	root.wm_attributes('-topmost', 1)
+	file = askopenfilename(parent=root, title="ffmpeg.exe",
+		filetypes=[("ffmpeg", "ffmpeg*.exe"), ("All files", "*.*")]
+	)
+	if file:
+		FFMPEG_CUSTOM = file
+		FFMPEG_SOURCE = "custom"
+		FFMPEG, FFMPEG_NOTE = resolve_ffmpeg()
+		store_settings(load_settings())
+	return get_ffmpeg_info()
+
+@eel.expose
 def delete_settings():
-	global SCRIPT_FILE, OUTPUT_F, FFMPEG, SUBTITLES_F
+	global SCRIPT_FILE, OUTPUT_F, FFMPEG, SUBTITLES_F, FFMPEG_SOURCE, FFMPEG_CUSTOM, FFMPEG_NOTE
 	SCRIPT_FILE = find_script("GICutscenes.exe")
 	OUTPUT_F = os.path.join(os.getcwd(), "output")
-	FFMPEG = find_script("ffmpeg.exe") or "ffmpeg"
+	FFMPEG_SOURCE = "bundled"
+	FFMPEG_CUSTOM = ""
+	FFMPEG, FFMPEG_NOTE = resolve_ffmpeg()
 	SUBTITLES_F = ""
 	
 	set_file = os.path.join(os.getcwd(), "UI-settings.json")
@@ -455,6 +535,9 @@ def start_work(files, args):
 	global STOPED_BY_USER
 	STOPED_BY_USER = False
 	send_message_to_ui_output("event", "start")
+	send_message_to_ui_output("console", f"Using ffmpeg: {FFMPEG}")
+	if FFMPEG_NOTE:
+		send_message_to_ui_output("console", f"[WARN] {FFMPEG_NOTE}")
 	file_lenth = len(files)
 	send_message_to_ui_output("file_count", [0, file_lenth])
 	# Make folders

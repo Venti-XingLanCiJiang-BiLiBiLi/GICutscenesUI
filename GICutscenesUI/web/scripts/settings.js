@@ -111,6 +111,28 @@ async function get_subtitles_folder(){
 	update_path(folder, document.getElementById("subtitles_path"))
 }
 
+function update_ffmpeg_info(info){
+	if (!info) return
+	document.getElementById("ffmpeg_source").value = info.source
+	let custom = document.getElementById("ffmpeg_custom_path")
+	custom.value = info.custom || ""
+	custom.title = info.custom || ""
+	let active = document.getElementById("ffmpeg_active")
+	active.value = info.path || ""
+	active.title = info.warning || info.path || ""
+	active.style.borderColor = info.warning ? "orange" : ""
+}
+async function load_ffmpeg_info(){
+	update_ffmpeg_info(await eel.get_ffmpeg_info()())
+}
+async function change_ffmpeg_source(){
+	let select = document.getElementById("ffmpeg_source")
+	update_ffmpeg_info(await eel.set_ffmpeg_source(select.value)())
+}
+async function choose_ffmpeg_file(){
+	update_ffmpeg_info(await eel.ask_ffmpeg_file()())
+}
+
 async function get_all_fonts(){
 	let fonts = await eel.get_all_fonts()();
 	let parent = document.querySelector("#subtitles_font")

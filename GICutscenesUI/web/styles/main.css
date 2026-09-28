@@ -387,6 +387,18 @@ input[type="range" i]{
 	font-family: monospace;
 }
 
+#ffmpeg_custom_row {
+	display: none;
+	grid-column: 3;
+	gap: 5px;
+}
+#ffmpeg_custom_row input{
+	width: 100%;
+}
+#ffmpeg_source:has(option[value="custom"]:checked) ~ #ffmpeg_custom_row{
+	display: flex;
+}
+
 #subtitles_preview{
 	max-width: min(100%, 750px);
 	max-height: 42vh;

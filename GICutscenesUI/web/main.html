@@ -115,6 +115,34 @@
 
 		<div class="section-card">
 			<div class="section-header">
+				<i class="fa-solid fa-film"></i>
+				<span translation="__ffmpeg_title__">ffmpeg</span>
+			</div>
+			<div class="section-body">
+				<i class="fa-solid fa-plug"></i>
+				<span class="mp4-label">
+					<span translation="__ffmpeg_source__">Source</span>
+					<i class="mp4-hint" translation="__title:ffmpeg_source_hint__">?</i>
+				</span>
+				<select class="input_element" id="ffmpeg_source" onchange="change_ffmpeg_source()">
+					<option value="bundled" translation="__ffmpeg_source_bundled__">Bundled</option>
+					<option value="path" translation="__ffmpeg_source_path__">From PATH</option>
+					<option value="custom" translation="__ffmpeg_source_custom__">Custom file</option>
+				</select>
+
+				<i class="fa-solid fa-terminal"></i>
+				<span translation="__ffmpeg_active__">In use:</span>
+				<input type="text" readonly class="input_element path" id="ffmpeg_active">
+
+				<div id="ffmpeg_custom_row">
+					<input type="text" readonly class="input_element path" id="ffmpeg_custom_path">
+					<button onclick="choose_ffmpeg_file()" class="input_element" translation="__change__">Change</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="section-card">
+			<div class="section-header">
 				<i class="fa-solid fa-photo-film"></i>
 				<span translation="__merging_area__">Rendering</span>
 				<label class="toggle-switch">
