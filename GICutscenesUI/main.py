@@ -519,6 +519,7 @@ def start_work(files, args):
 
 				# Subtitles
 				subtitles_file = None
+				subtitles = None
 				if args['subtitles']:
 					send_message_to_ui_output("console", "\nSearching for subtitles")
 
@@ -604,23 +605,23 @@ def start_work(files, args):
 						subs_file = os.path.relpath(subtitles_file).replace("\\", "/")
 						subtitles_args = ["-vf", f'subtitles={subs_file}']
 					audio_strategies = [[]]
-				mapping_args = ['-map', '0:v:0']
-				if args['merge']:
-					if args.get('lossless_audio'):
-						# Lossless: copy PCM from the wav into the mp4 (ipcm)
-						audio_strategies = [
-							['-i', audio_file, '-c:a', 'copy', '-map', '1:a:0'],
-							['-i', audio_file, '-c:a', 'aac', '-b:a', '320K', '-map', '1:a:0']
-						]
-					else:
-						# Default: reuse the opus track from the webm
-						audio_strategies = [
-							['-map', '0:a:0', '-c:a', 'copy'],
-							['-i', audio_file, '-c:a', 'aac', '-b:a', '320K', '-map', '1:a:0']
-						]
+					mapping_args = ['-map', '0:v:0']
 					bitrate_args = []
 					if args.get('mp4_bitrate'):
 						bitrate_args = ['-b:v', str(int(args['mp4_bitrate'])) + 'K']
+					if args['merge']:
+						if args.get('lossless_audio'):
+							# Lossless: copy PCM from the wav into the mp4 (ipcm)
+							audio_strategies = [
+								['-i', audio_file, '-c:a', 'copy', '-map', '1:a:0'],
+								['-i', audio_file, '-c:a', 'aac', '-b:a', '320K', '-map', '1:a:0']
+							]
+						else:
+							# Default: reuse the opus track from the webm
+							audio_strategies = [
+								['-map', '0:a:0', '-c:a', 'copy'],
+								['-i', audio_file, '-c:a', 'aac', '-b:a', '320K', '-map', '1:a:0']
+							]
 
 					p_status = 1
 					encoder_chain = get_encoder_chain(args.get('mp4_encoder'))
